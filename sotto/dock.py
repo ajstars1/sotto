@@ -784,7 +784,7 @@ class Dock(Gtk.Application):
         if self.term_catcher and self.term_catcher.get_visible():
             self.release_term()
         try:
-            mon_h = json.loads(hypr("monitors", "-j") or "[]")[0]["height"]
+            mon_h = self.screen_box()[1]
         except (IndexError, KeyError, json.JSONDecodeError):
             mon_h = 768
         h = max(240, min(500, mon_h - 26 - 150))
@@ -1248,15 +1248,29 @@ class Dock(Gtk.Application):
             pass
         return False
 
+    def screen_box(self) -> tuple[int, int]:
+        """(top, height) of the screen the dock is on, in the same scaled pixels as
+        `hyprctl cursorpos` (a 4K TV at 2.5x is 864 high, not 2160)."""
+        try:
+            surf = self.win.get_surface() if self.win else None
+            mon = Gdk.Display.get_default().get_monitor_at_surface(surf) if surf else None
+            if mon:
+                g = mon.get_geometry()
+                return g.y, g.height
+        except Exception:
+            pass
+        m = json.loads(hypr("monitors", "-j") or "[]")[0]
+        return m["y"], round(m["height"] / (m.get("scale") or 1))
+
     def pointer_on_dock(self) -> bool:
         """Hyprland sends 'enter' when the dock appears even if the mouse is far away,
         so check where the cursor really is."""
         try:
             x, y = (int(v) for v in hypr("cursorpos").split(","))
-            mon_h = json.loads(hypr("monitors", "-j") or "[]")[0]["height"]
+            top, mon_h = self.screen_box()
         except (ValueError, IndexError, KeyError, json.JSONDecodeError):
             return True
-        visible_top = mon_h - (self.win.get_height() + self.margin)
+        visible_top = top + mon_h - (self.win.get_height() + self.margin)
         return y >= visible_top - 1
 
     def on_enter(self):

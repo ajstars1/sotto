@@ -23,7 +23,9 @@ fi
 [ "$(echo "$win" | jq .floating)" = true ] || hyprctl dispatch setfloating "address:$addr" >/dev/null
 
 mon=$(hyprctl monitors -j | jq -c --argjson id "$(echo "$win" | jq .monitor)" '.[] | select(.id == $id)')
-eval "$(echo "$mon" | jq -r '"mx=\(.x) my=\(.y) mw=\(.width) mh=\(.height) rl=\(.reserved[0]) rt=\(.reserved[1]) rr=\(.reserved[2]) rb=\(.reserved[3])"')"
+# width/height are the panel's real pixels; windows live in scaled ones (4K TV at 2.5x = 1536x864)
+eval "$(echo "$mon" | jq -r '(if (.transform % 2) == 1 then [.height, .width] else [.width, .height] end) as [$w, $h]
+  | "mx=\(.x) my=\(.y) mw=\($w / .scale | round) mh=\($h / .scale | round) rl=\(.reserved[0]) rt=\(.reserved[1]) rr=\(.reserved[2]) rb=\(.reserved[3])"')"
 X=$((mx + rl + B)); Y=$((my + rt + BAR + B)); W=$((mw - rl - rr - 2 * B)); H=$((mh - rt - rb - BAR - 2 * B))
 eval "$(echo "$win" | jq -r '"wx=\(.at[0]) wy=\(.at[1]) ww=\(.size[0]) wh=\(.size[1])"')"
 

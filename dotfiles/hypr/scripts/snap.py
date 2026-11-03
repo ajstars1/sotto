@@ -64,9 +64,20 @@ def log(msg: str):
         pass
 
 
+def screen_size(m: dict) -> tuple[int, int]:
+    """Size in layout pixels: hyprctl gives the panel's real pixels (a 4K TV at 2.5x
+    is 3840x2160) but windows are placed in scaled ones (1536x864)."""
+    w, h = m["width"], m["height"]
+    if m.get("transform", 0) % 2:      # rotated 90/270
+        w, h = h, w
+    s = m.get("scale") or 1
+    return round(w / s), round(h / s)
+
+
 def work_area(m: dict):
     l, t, r, b = m["reserved"]
-    return m["x"] + l, m["y"] + t, m["width"] - l - r, m["height"] - t - b
+    w, h = screen_size(m)
+    return m["x"] + l, m["y"] + t, w - l - r, h - t - b
 
 
 def layouts(m: dict) -> dict:
@@ -91,7 +102,8 @@ def window_rect(rect, b: int):
 
 
 def zone_at(cx: int, cy: int, m: dict):
-    mx, my, mw, mh = m["x"], m["y"], m["width"], m["height"]
+    mx, my = m["x"], m["y"]
+    mw, mh = screen_size(m)
     top_area = my + m["reserved"][1]
     at_left, at_right, at_top = cx <= mx + EDGE, cx >= mx + mw - 1 - EDGE, cy <= my + EDGE
     if at_top:
@@ -160,7 +172,7 @@ def keep_reachable(win: dict, m: dict, b: int):
     x, y = win["at"]
     w = win["size"][0]
     ny = max(y, wy + BAR + b)
-    nx = min(max(x, m["x"] + 80 - w), m["x"] + m["width"] - 80)
+    nx = min(max(x, m["x"] + 80 - w), m["x"] + screen_size(m)[0] - 80)
     if (nx, ny) != (x, y):
         dispatch("movewindowpixel", f"exact {nx} {ny},address:{win['address']}")
         log(f"nudge {win['class']} back on screen")
