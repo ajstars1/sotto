@@ -19,6 +19,7 @@
       "pulseaudio",
       "tray",
       "custom/rec",
+      "custom/control",
       "clock",
       "custom/power",
       "custom/desktop"
@@ -62,13 +63,15 @@
       "format-linked": "NO IP",
       "format-disconnected": "OFFLINE",
       "tooltip-format": "{ifname} {ipaddr}",
-      "on-click": "kitty -e nmtui"
+      "on-click": "~/.config/hypr/scripts/wifi-menu.py",
+      "on-click-right": "kitty -e nmtui"
     },
     "pulseaudio": {
       "format": "VOL {volume}%",
       "format-muted": "MUTE",
       "scroll-step": 5,
-      "on-click": "pavucontrol",
+      "on-click": "~/.config/hypr/scripts/sound-menu.py",
+      "on-click-right": "pavucontrol",
       "tooltip": false
     },
     "custom/crt": {
@@ -101,6 +104,11 @@
       "interval": "once",
       "signal": 9,
       "on-click": "~/.config/hypr/scripts/record.sh toggle"
+    },
+    "custom/control": {
+      "format": "󰔡",
+      "tooltip": false,
+      "on-click": "~/.config/hypr/scripts/control-center.py"
     },
     "custom/power": {
       "format": "OFF",

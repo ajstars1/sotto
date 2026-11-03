@@ -202,3 +202,14 @@ window#waybar.dock #taskbar button.active {
 #custom-desktop:hover {
     color: #a7783f;
 }
+
+/* Control Center button (SUPER+A) */
+#custom-control {
+    padding: 0 10px;
+    color: #3d2c1f;
+    font-size: 14px;
+}
+
+#custom-control:hover {
+    color: #a7783f;
+}

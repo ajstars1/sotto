@@ -20,12 +20,15 @@ SUPER + `                drop-down scratch workspace
 SUPER + SHIFT + `        send the window to the scratch workspace
 SUPER + L                lock the screen
 SUPER + SHIFT + V        clipboard history
-SUPER + SHIFT + E        power menu: lock, log out, restart, shut down
+SUPER + SHIFT + E        power menu: lock, log out, sleep, restart, shut down (again or Esc closes)
 SUPER + H                refresh the wallpaper's project list
 SUPER + SHIFT + B        hide / show the top bar
 SUPER + SHIFT + C        CRT effect: off > scanlines > amber
 SUPER + SHIFT + R        reload the desktop config
 SUPER + F1               this list
+SUPER + A                Control Center: Wi-Fi, Bluetooth, sound, displays, night light, do not disturb
+SUPER + W                Wi-Fi menu (or click the network label in the bar)
+SUPER + =  /  SUPER + -  everything bigger / smaller on this screen (TV), remembered
 PRINT                    screenshot an area
 SHIFT + PRINT            screenshot the whole screen
 CTRL + PRINT             record an area with sound and mic (press again, or click REC in the bar, to stop)

@@ -1,0 +1,41 @@
+/* Control Center and its menus (Wi-Fi, Sound, Displays, Bluetooth): a panel that drops
+   down under the bar on the right, like a Mac's.
+   The rofi surface covers the whole screen (transparent) so a click anywhere outside
+   the panel closes it (the menus bind left-click to cancel; clicks on rows still pick). */
+@import "menu"
+window {
+    fullscreen: true;
+    location: center;
+    anchor: center;
+    x-offset: 0;
+    y-offset: 0;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background-color: transparent;
+    children: [ "outer" ];
+}
+outer    { orientation: horizontal; children: [ "dummy", "panel" ]; }
+panel    { orientation: vertical; children: [ "pad", "mainbox", "dummy" ]; expand: false; width: 430px; margin: 0 10px 0 0; }
+pad      { expand: false; padding: 34px 0 0 0; }
+mainbox  {
+    expand: false;
+    children: [ "message", "listview" ];
+    spacing: 6px;
+    padding: 10px;
+    background-color: @bg;
+    border: 1px;
+    border-color: @line;
+    border-radius: 14px;
+}
+message  { padding: 6px 12px 6px; border: 0 0 1px 0; border-color: @line; }
+textbox  { text-color: @text; markup: true; }
+inputbar { padding: 7px 12px; border-radius: 8px; background-color: @panel; children: [ "entry" ]; }
+entry    { placeholder: "search"; placeholder-color: @dim; cursor: text; }
+listview { lines: 12; fixed-height: true; spacing: 1px; }
+element  { padding: 6px 12px; }
+element-text { markup: true; }
+/* section headers: plain labels, never highlighted */
+element normal.urgent, element alternate.urgent { padding: 10px 12px 2px; text-color: @dim; }
+element selected.urgent { padding: 10px 12px 2px; background-color: transparent; text-color: @dim; }
