@@ -327,6 +327,7 @@ class Dock(Gtk.Application):
         self.populate()
         self.apply_autohide()
         self.win.present()
+        GLib.timeout_add(200, self.update_dock_input)
         self.make_preview()
         self.make_prompt()
         self.make_drawer()
@@ -1026,6 +1027,7 @@ class Dock(Gtk.Application):
             self.box.remove(child)
             child = nxt
         self.items.clear()
+        GLib.timeout_add(60, self.update_dock_input)   # the pill's width changes with its icons
         for app_id in self.cfg["pinned"]:
             self.add_item(app_id, pinned=True)
         if self.cfg["show_unpinned"]:
@@ -1222,6 +1224,30 @@ class Dock(Gtk.Application):
         h = self.win.get_height() or (self.cfg["icon_size"] + 30)
         return -(h - 2)             # leave a 2px edge on screen to catch the mouse
 
+    def update_dock_input(self) -> bool:
+        """Where the dock catches the mouse. The window is a full-width strip, but only
+        the pill should take clicks: everything beside it (and the pill while it slides
+        away) clicks through to the windows behind. Once fully hidden, the whole 2px
+        bottom edge catches the mouse again, so touching the bottom anywhere shows it."""
+        surf = self.win.get_surface() if self.win else None
+        if surf is None or cairo is None:
+            return False
+        try:
+            if self.cfg["autohide"] and self.target < 0 and self.margin <= self.target:
+                region = cairo.Region(cairo.RectangleInt(0, 0, 100000, 100000))
+            else:
+                ok, b = self.box.compute_bounds(self.win)
+                if not ok:
+                    return False
+                pad = 4
+                region = cairo.Region(cairo.RectangleInt(int(b.get_x()) - pad, int(b.get_y()) - pad,
+                                                         int(b.get_width()) + 2 * pad, int(b.get_height()) + 2 * pad))
+            surf.set_input_region(region)
+            self.win.queue_draw()       # GTK only sends the new region with the next frame
+        except Exception:               # never let this break the dock
+            pass
+        return False
+
     def pointer_on_dock(self) -> bool:
         """Hyprland sends 'enter' when the dock appears even if the mouse is far away,
         so check where the cursor really is."""
@@ -1267,6 +1293,7 @@ class Dock(Gtk.Application):
         if not LS:
             return
         self.target = target
+        self.update_dock_input()
         if self.anim:
             return
         start, t0 = self.margin, GLib.get_monotonic_time()
@@ -1280,6 +1307,7 @@ class Dock(Gtk.Application):
                 self.anim = 0
                 if self.margin != self.target:
                     self.slide_to(self.target)
+                self.update_dock_input()
                 return False
             return True
 
