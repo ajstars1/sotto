@@ -3,12 +3,14 @@
   python -m sotto collect          refresh state.json (only rewrites on change)
   python -m sotto wall             run the live wallpaper (inside kitty's panel)
   python -m sotto say "text"       make the mascot say something
+  python -m sotto profile [secs]   record the running wall's frames (default 30 s) to ~/.cache/sotto/profile-*.json
   python -m sotto preview out.png  render one frame to a PNG
   python -m sotto ask "open youtube" [--do]   what the wallpaper assistant would do
   python -m sotto bootsplash DIR [--preview out.png]   render the boot screen theme into DIR
   python -m sotto greet [--demo]   the login screen (under greetd; --demo: password "sotto")
 """
 import json
+import os
 import sys
 
 from . import collect
@@ -23,6 +25,10 @@ def main(argv: list[str]) -> int:
     if cmd == "say":
         collect.say(" ".join(argv[1:]) or "...")
         return 0
+    if cmd == "profile":
+        from . import profile
+
+        return profile.request(argv[1:])
     if cmd == "preview":
         from .art import font_path
         from .grid import to_png
@@ -30,7 +36,9 @@ def main(argv: list[str]) -> int:
 
         out = argv[1] if len(argv) > 1 else "preview.png"
         state = collect.collect()
-        grid, _ = build(state, 195, 54, hover=0)
+        from . import agents
+        live = state.get("agents") if os.environ.get("SOTTO_DEMO") else agents.sessions()
+        grid, _ = build(state, 195, 54, hover=None, agents=live)
         to_png(grid, out, font_path())
         print(f"wrote {out}")
         return 0

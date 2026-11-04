@@ -12,6 +12,7 @@
       "hyprland/window"
     ],
     "modules-right": [
+      "custom/agent",
       "cpu",
       "memory",
       "temperature",
@@ -104,6 +105,12 @@
       "interval": "once",
       "signal": 9,
       "on-click": "~/.config/hypr/scripts/record.sh toggle"
+    },
+    "custom/agent": {
+      "exec": "~/.config/hypr/scripts/agent-badge.py",
+      "return-type": "json",
+      "restart-interval": 5,
+      "escape": true
     },
     "custom/control": {
       "format": "󰔡",

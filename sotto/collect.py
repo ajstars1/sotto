@@ -18,6 +18,8 @@ import tomllib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from . import today as todaymod
+
 HOME = Path.home()
 CACHE = Path(os.environ.get("XDG_CACHE_HOME", HOME / ".cache")) / "sotto"
 STATE = Path(os.environ["SOTTO_STATE"]) if os.environ.get("SOTTO_STATE") else CACHE / "state.json"
@@ -360,6 +362,7 @@ def collect():
         "projects": projects,
         "messages": messages,
         "tokens": code_tokens([Path(p["path"]) for p in projects]),
+        "today": todaymod.collect(cfg),
     }
 
 

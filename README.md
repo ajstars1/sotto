@@ -24,12 +24,13 @@ The wallpaper is part of a calm, mouse-first [Hyprland](https://hypr.land) deskt
 
 It isn't an image or a video. It's **a small program drawing on the desktop itself**: a terminal app running on Hyprland's background layer (`kitty +kitten panel --edge=background`), in a pixel font, one character cell at a time.
 
-- **It shows what matters right now.** A quiet clock, a greeting, and your six most recent projects. Projects are ranked from where you've actually worked:
-  - your Claude Code sessions
-  - commits *you* authored (cloned repos with someone else's commits don't count)
-  - uncommitted edits
+- **Your agents, at a glance.** The left column is a live board of your running Claude Code sessions, most urgent first:
+  - **Needs you**: it asked a question, wants a choice, or is waiting for your OK
+  - **Working**: busy right now, with what it is doing
+  - **Done**: finished its turn, with the first line of what it said
 
-  Each row shows its branch, uncommitted changes and when you last touched it. **Click a project to open it.**
+  It re-checks every 3 seconds (unchanged sessions cost nothing) and reads only local files: `~/.claude/sessions` and the end of each session's transcript, so it works the same on macOS. **Click a session to jump to its terminal** (or press 1 to 9).
+- **Your day.** The right column shows your calendar and what's due: any iCal link (Google Calendar's "secret address in iCal format", Fastmail, iCloud public calendars) and/or a command that prints JSON, e.g. your own task tracker. See Configuration.
 - **It's data-driven.** Everything comes from `~/.cache/sotto/state.json`. A collector refreshes it every few minutes, and anything else can write it too. When the file changes, **only the changed cells re-assemble**: they flicker as dots, then settle into the new text. In the GIF, a new project slides into the list that way.
 - **Scripts can talk to it.**
 
@@ -39,6 +40,8 @@ It isn't an image or a video. It's **a small program drawing on the desktop itse
 
   The message takes the greeting's place for a few seconds. It's useful for long builds, test runs, deploys and reminders.
 - **It costs nothing when idle.** If nothing changes, it draws nothing: 0 bytes to the screen and no CPU. It takes about 115 MB of RAM including the terminal it runs in. Moving the mouse leaves a faint trail of dots that fades out, and whatever it touches comes loose for a moment: the clock's pixels dissolve into shades (░▒▓) and re-form, letters flicker into dots and settle.
+
+  To check, ask the running wallpaper: `python -m sotto profile 30` records every frame it draws for 30 s (cause, cells changed, bytes, build and write time) and prints the path of a JSON file in `~/.cache/sotto/`, with a summary on top: frames, idle seconds, p50/p95 frame time, total bytes.
 
 ## Ask your wallpaper
 
@@ -99,6 +102,7 @@ Try the brain from a terminal: `python -m sotto ask "open youtube"` (add `--do` 
   - An Apps button that opens the app list.
   - One icon per window: click to switch, click again to minimize, middle-click to close.
   - System status, and a **show desktop** button in the corner (also `Super+D`).
+  - A quiet ochre **● claude** while an AI agent is moving the mouse or typing (it reads `~/.cache/aos-desk/acting.json`: `{"tool": "...", "until": <unix seconds>}`).
 - **Zen browser** in the same palette: parchment instead of Zen's gradient, umber text, an ochre accent, tabs on paper (`dotfiles/zen/`, copied into Zen's profile by `install.sh` or `dotfiles/zen/apply.sh`; restart Zen to see it).
 - **Login screen.** The wallpaper's own home screen: the same clock in the same place, the same greeting and dot trail, and a password line where your projects will be. Pick Hyprland or Ubuntu at the bottom (Tab or click); restart and shut down sit in the corner. When you log in it dissolves to bare parchment and the wallpaper fades in around a clock that never moved. It runs under [greetd](https://sr.ht/~kennylevinsen/greetd/) in kitty inside [cage](https://github.com/cage-kiosk/cage): `bin/sotto-greeter install`, then `preview` to try it in a window, then `enable` (`disable` brings back GDM). If it ever fails to start you get a plain text login instead.
 - **Boot screen.** Instead of the Ubuntu logo: parchment, "sotto" in the clock's pixel font, a greeting ("Welcome back", "See you soon" when shutting down), and the wallpaper's dot trail sweeping underneath. Install it with `bin/sotto-bootsplash` (uses sudo; `--undo` brings back Ubuntu's).
@@ -112,7 +116,9 @@ git clone https://github.com/ajstars1/sotto ~/Developer/sotto
 cd ~/Developer/sotto
 sudo apt install $(cat dotfiles/packages.txt)
 uv sync --managed-python --python 3.12          # the wallpaper's Python env; immune to OS Python upgrades
+./dotfiles/install.sh --plan                    # what it would do; changes nothing
 ./dotfiles/install.sh                           # links configs into ~/.config, backing up what it replaces
+./dotfiles/install.sh doctor                    # read-only check: packages, links, uv env, $sotto, versions
 ```
 
 Set `$sotto` near the top of `dotfiles/hypr/hyprland.conf` to where you cloned the repo. Then log out, pick **Hyprland** on the login screen, and log in. For AI answers, install and log in to [Claude Code](https://claude.com/claude-code).
@@ -129,6 +135,16 @@ path = "~/Developer/my-app"
 label = "MY-APP"
 open = ["kitty --directory {path}", "kitty --directory {path} -e npm run dev"]
 ```
+
+The right column ("Today"):
+
+```toml
+[today]
+ics = ["https://calendar.google.com/calendar/ical/.../basic.ics"]   # events until the end of tomorrow
+command = "my-tasks --json"   # prints {"items": [{"when": "19:30", "title": "...", "flag": "overdue|today|event"}], "footer": "..."}
+```
+
+Repeating calendar events are not expanded yet. The command runs with each refresh (every 5 minutes) and has 25 seconds.
 
 - **The dock:** Dock Settings (right-click any dock icon), saved to `~/.config/sotto/dock.json`.
 - **Palette, keybinds, title bars, bar, launcher, notifications, lock screen:** `dotfiles/`.

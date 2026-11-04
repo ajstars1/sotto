@@ -109,6 +109,13 @@ tooltip label {
     color: #a9532f;
 }
 
+/* an agent is driving the desktop: a quiet ochre "● claude", only while it acts
+   (agent-badge.py reads ~/.cache/aos-desk/acting.json) */
+#custom-agent.acting {
+    padding: 0 10px;
+    color: #a7783f;
+}
+
 /* screen recording: the button only shows while recording */
 #custom-rec.recording {
     padding: 0 10px;

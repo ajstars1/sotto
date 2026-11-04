@@ -29,12 +29,15 @@ import time
 import traceback
 import tty
 
+from . import agents as agentboard
 from . import collect
+from . import profile as prof
 from .grid import Grid, ansi_diff
 from .scene import build
 
 FPS = 30
 REFRESH_EVERY = 300            # re-read projects/system this often (seconds)
+AGENTS_EVERY = 3               # re-check Claude Code sessions this often (cheap: unchanged files are not re-read)
 SAY_SECONDS = 8                # a `say` message stays this long
 RUNTIME = os.environ.get("XDG_RUNTIME_DIR", "/tmp")
 PIDFILE = os.path.join(RUNTIME, "sotto-wall.pid")
@@ -95,7 +98,10 @@ class Wall:
         self.state_mtime = self.mtime(collect.STATE)
         self.inbox_mtime = self.mtime(collect.INBOX)
         self.regions = []
-        self.hover: int | None = None
+        self.hover: tuple | None = None                # (kind, index) of the row under the mouse
+        self.agents: list[dict] = []
+        self.agents_sig: tuple = ()
+        self.next_agents = 0.0
         self.say_text: str | None = None
         self.say_until = 0.0
         self.hide_at = 0.0
@@ -111,6 +117,8 @@ class Wall:
         self.drag = None                           # ("move" | "size", dx, dy) while dragging the card
         self.outer_modes = (False, False)          # cursor-key and paste modes mirrored to kitty
         self.sock = None
+        self.prof: prof.Profile | None = None      # a frame recording, while `sotto profile` runs
+        self.fade_cause = "show"
 
     # ── plumbing ──────────────────────────────────────────────────────────
     @staticmethod
@@ -131,10 +139,19 @@ class Wall:
         except (OSError, json.JSONDecodeError):
             return {}
 
+    def _out(self, s: str) -> int:
+        if not s:
+            return 0
+        b = s.encode()
+        self.out.write(b)
+        self.out.flush()
+        return len(b)
+
     def write(self, s: str):
-        if s:
-            self.out.write(s.encode())
-            self.out.flush()
+        """Escape codes outside a frame (modes, clearing the screen)."""
+        n = self._out(s)
+        if n and self.prof is not None:
+            self.prof.frame("control", 0, n, 0.0, 0.0)
 
     def refresh_async(self):
         if self.collecting or os.environ.get("SOTTO_DEMO"):
@@ -154,7 +171,8 @@ class Wall:
     # ── frames ────────────────────────────────────────────────────────────
     def home(self) -> Grid:
         say = self.say_text if time.time() < self.say_until else None
-        g, self.regions = build(self.state, self.cols, self.rows, time.time(), self.hover, say)
+        live = None if os.environ.get("SOTTO_DEMO") else self.agents
+        g, self.regions = build(self.state, self.cols, self.rows, time.time(), self.hover, say, live)
         return g
 
     def compose(self) -> Grid:
@@ -210,18 +228,26 @@ class Wall:
                     continue
                 self.scatter[i] = (now, self.rng.uniform(0.45, 1.1), self.rng.randrange(1000))
 
-    def present(self, frame: Grid, only=None):
-        self.write(ansi_diff(self.shown, frame, only))
+    def present(self, frame: Grid, only=None, cause: str = "frame"):
+        p = self.prof
+        if p is None:
+            self._out(ansi_diff(self.shown, frame, only))
+        else:
+            t1 = time.perf_counter()
+            n = self._out(ansi_diff(self.shown, frame, only))
+            t2 = time.perf_counter()
+            p.frame(cause, prof.changed_cells(self.shown, frame, only), n, t1 - p.mark, t2 - t1)
         self.shown = frame
 
-    def set_base(self, new: Grid, animate: bool, speed: float = 1.0):
+    def set_base(self, new: Grid, animate: bool, speed: float = 1.0, cause: str = "frame"):
         if animate:
             self.fade_src = self.shown.copy()
             self.fade = Fade(self.fade_src, new, self.rng, speed)
             self.fade_t0 = time.time()
+            self.fade_cause = cause
         self.base = new
         if not animate:
-            self.present(self.compose())
+            self.present(self.compose(), cause=cause)
 
     # ── show / hide ───────────────────────────────────────────────────────
     def show(self, text: str | None = None):
@@ -233,7 +259,7 @@ class Wall:
             self.trail.clear()
             self.scatter.clear()
             self.refresh_async()
-        self.set_base(self.home(), animate=True)
+        self.set_base(self.home(), animate=True, cause="say" if text else "show")
 
     def hide(self):
         """The wallpaper never hides; kept so old callers stay harmless."""
@@ -278,10 +304,10 @@ class Wall:
             if not hit:
                 self.drop_dots(x, y)
                 self.disturb(x, y)
-            new = hit.index if hit else None
+            new = (hit.kind, hit.index) if hit else None
             if new != self.hover:
                 self.hover = new
-                self.set_base(self.home(), animate=False)
+                self.set_base(self.home(), animate=False, cause="hover")
             return
         if not press:
             return
@@ -304,7 +330,7 @@ class Wall:
         elif (b & 3) == 0:
             hit = next((r for r in self.regions if r.hit(x, y)), None)
             if hit:
-                self.open_project(hit.index)
+                self.open_row(hit)
                 return
             now = time.time()
             last = self.last_click
@@ -345,7 +371,7 @@ class Wall:
         t.move_to(x, y, self.cols, self.rows)
         self.term = t
         self.focus_term(True)
-        self.present(self.compose(), only=t.cells(self.cols, self.rows))
+        self.present(self.compose(), only=t.cells(self.cols, self.rows), cause="terminal")
 
     def close_term(self):
         t = self.term
@@ -355,7 +381,7 @@ class Wall:
         self.focus_term(False)
         self.term, self.drag = None, None
         t.close()
-        self.present(self.compose(), only=cells)
+        self.present(self.compose(), only=cells, cause="terminal")
 
     def focus_term(self, on: bool):
         on = bool(on and self.term)
@@ -407,7 +433,7 @@ class Wall:
         else:
             t.resize(x + dx - t.x - 1, y + dy - t.y - 1, self.cols, self.rows)
         self.push_through(t)
-        self.present(self.compose(), only=before | t.cells(self.cols, self.rows) | set(self.scatter))
+        self.present(self.compose(), only=before | t.cells(self.cols, self.rows) | set(self.scatter), cause="terminal-drag")
 
     def push_through(self, t):
         """Dragging the terminal shakes the wallpaper loose along its edges."""
@@ -438,6 +464,10 @@ class Wall:
                 self.open_term()
         elif msg and msg[0] == "term-release":
             self.focus_term(False)
+        elif msg and msg[0] == "profile":
+            req = prof.parse_request(msg)
+            if req and self.prof is None:
+                self.prof = prof.Profile(*req)
 
     def tell_dock(self, msg: str):
         try:
@@ -456,8 +486,43 @@ class Wall:
             self.on_key(ch)
 
     def on_key(self, ch: str):
-        if self.visible and ch in "123456":
-            self.open_project(int(ch) - 1)
+        if self.visible and ch in "123456789" and int(ch) <= len(self.agents):
+            self.jump_agent(int(ch) - 1)
+
+    def open_row(self, hit):
+        if hit.kind == "agent":
+            self.jump_agent(hit.index)
+        elif hit.kind == "project":
+            self.open_project(hit.index)
+
+    def jump_agent(self, n: int):
+        if n >= len(self.agents):
+            return
+        try:
+            note = agentboard.jump(self.agents[n])
+        except Exception:
+            log_error()
+            note = "could not reach that session's window"
+        if note:
+            self.say_text, self.say_until = note, time.time() + 6
+            self.set_base(self.home(), animate=False, cause="say")
+
+    def poll_agents(self, now: float):
+        """Re-read the Claude Code sessions; re-assemble the board only when something changed."""
+        self.next_agents = now + AGENTS_EVERY
+        try:
+            fresh = agentboard.sessions(now)
+        except Exception:
+            log_error()
+            return
+        sig = tuple((a["pid"], a["status"], a["detail"]) for a in fresh)
+        if sig == self.agents_sig:
+            self.agents = fresh                      # same board; times refresh with the clock
+            return
+        first = not self.agents_sig and not self.agents
+        self.agents, self.agents_sig = fresh, sig
+        if self.visible and not self.fade:
+            self.set_base(self.home(), animate=not first, speed=0.8, cause="agents")
 
 
     def open_project(self, n: int):
@@ -496,6 +561,12 @@ class Wall:
         now = time.time()
         if "quit" in self.flags:
             raise SystemExit
+        if self.prof is not None and now >= self.prof.end:
+            p, self.prof = self.prof, None
+            try:
+                p.save()
+            except OSError:
+                log_error()
         if "resize" in self.flags:
             self.flags.discard("resize")
             self.cols, self.rows = self.size()
@@ -503,7 +574,7 @@ class Wall:
             self.base = self.home() if self.visible else Grid(self.cols, self.rows)
             self.shown = Grid(self.cols, self.rows)
             self.write("\x1b[48;2;236;226;208m\x1b[2J")
-            self.present(self.compose())
+            self.present(self.compose(), cause="resize")
         if "toggle" in self.flags:
             self.flags.discard("toggle")
             self.refresh_async()
@@ -513,7 +584,7 @@ class Wall:
             self.state_mtime = m
             self.state = self.load_state()
             if self.visible and not self.fade:
-                self.set_base(self.home(), animate=True, speed=0.6)
+                self.set_base(self.home(), animate=True, speed=0.6, cause="state")
         m = self.mtime(collect.INBOX)
         if m != self.inbox_mtime:
             self.inbox_mtime = m
@@ -528,7 +599,7 @@ class Wall:
             elif self.term_dirty and now - self.term_drawn >= 1 / FPS:
                 self.term_dirty, self.term_drawn = False, now
                 self.sync_modes()
-                self.present(self.compose(), only=self.term.cells(self.cols, self.rows) | set(self.trail))
+                self.present(self.compose(), only=self.term.cells(self.cols, self.rows) | set(self.trail), cause="terminal")
 
         if self.fade:
             t = now - self.fade_t0
@@ -539,7 +610,7 @@ class Wall:
                 self.term.recede(frame)
                 self.term.draw(frame, self.term_focused)
                 only |= self.term.cells(self.cols, self.rows)
-            self.present(frame, only=only)
+            self.present(frame, only=only, cause=self.fade_cause)
             if t >= self.fade.end:
                 self.fade = None
             return
@@ -551,18 +622,21 @@ class Wall:
             settled = [i for i, (born, life, _) in self.scatter.items() if now - born >= life]
             for i in settled:
                 del self.scatter[i]
-            self.present(self.compose(), only=set(self.trail) | set(dead) | set(self.scatter) | set(settled))
+            self.present(self.compose(), only=set(self.trail) | set(dead) | set(self.scatter) | set(settled), cause="trail")
 
         if now >= self.next_refresh:
             self.next_refresh = now + REFRESH_EVERY
             self.refresh_async()
+        if now >= self.next_agents and not os.environ.get("SOTTO_DEMO"):
+            self.poll_agents(now)
         if self.visible:
             minute = time.localtime(now).tm_min
             if minute != self.minute or (self.say_text and now >= self.say_until):
+                cause = "clock" if minute != self.minute else "say-end"
                 self.minute = minute
                 if self.say_text and now >= self.say_until:
                     self.say_text = None
-                self.set_base(self.home(), animate=False)
+                self.set_base(self.home(), animate=False, cause=cause)
 
     def timeout(self) -> float:
         return 1 / FPS if (self.fade or self.trail or self.scatter or self.term_dirty or self.drag) else 1.0
@@ -576,6 +650,8 @@ class Wall:
         while True:
             fds = [fd] + ([self.sock] if self.sock else []) + ([self.term.master] if self.term else [])
             r, _, _ = select.select(fds, [], [], self.timeout())
+            if self.prof is not None:
+                self.prof.mark = time.perf_counter()     # a frame's build time starts at the wake-up
             if fd in r:
                 try:
                     data = os.read(fd, 4096).decode(errors="surrogateescape")
