@@ -34,6 +34,19 @@ Not run on 4 Nov 2026: `Hyprland --verify-config` (what `install.sh` runs at the
 `install.sh` (only `--plan`), `bin/sotto-greeter preview`, and `python -m sotto profile` against the
 real wallpaper (it needs a wall restart first, see below).
 
+## macOS, Windows and the config (0.2 preview)
+
+| Check | Command | Result on 4 Nov 2026 |
+|---|---|---|
+| Test suite: config, widgets, layout, PNG preview, system numbers, assistant, a shell in a pty, a real wall driven over the web transport (first frame, mouse trail, double-click prompt answering, live theme switch), the server's token and Host checks | `uv run python -W ignore -m unittest discover -s tests -v` | Linux: 17/17 pass. macOS and Windows: see the GitHub Actions run for the release tag |
+| The wall on a real tty, new code | a wall in a pseudo-terminal with its own `XDG_RUNTIME_DIR`/`XDG_CACHE_HOME`/`SOTTO_CONFIG`, demo state: mouse motion, double-click, `how much ram` + Enter, then the config's theme changed to dusk | first frame 34 KB; trail dots drawn; answer contains "RAM"; dusk background drawn within 2.5 s; clean exit, empty wall.log |
+| `sotto web` in Chrome | Claude in Chrome on the page, demo state, a test config with two widgets | page draws; xterm.js sends SGR mouse reports and trail dots appear in the DOM; the double-click prompt answered "It's 19:40"; saving `theme = "night"` and a 12h clock repainted the open page |
+| Real config still valid | `python -m sotto config check` on this machine's config | looks good; layout and colours unchanged |
+| Wheel contents | `uv build --wheel` | the package plus fonts, web assets and the skill |
+
+Not verified on a real Mac or a real Windows desktop yet: placement behind the icons,
+cursor polling, the keyboard hand-over, LaunchAgent/Startup login items, and Retina/HiDPI sizing.
+
 ## Live checklist
 
 Only a person at the screen can confirm these. Mark one verified with the date and who saw it.

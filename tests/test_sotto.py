@@ -177,7 +177,9 @@ class WebWall(unittest.TestCase):
         self.assertTrue(self.h.focus and self.h.focus[-1] is True, "the prompt didn't take the keyboard")
         self.h.feed("what time is it\r")
         out = strip_ansi(self.h.drain(1.5))
-        self.assertIn("It's", out.replace(" ", ""))   # the answer types itself out over several frames
+        prompt = self.h.srv.io.wall.prompt
+        self.assertTrue(prompt is not None and prompt.answer.startswith("It's"), prompt and prompt.answer)
+        self.assertIn("It'", out)                      # and it was drawn (typed out over several frames)
         self.assertIs(self.h.focus[-1], False)        # keyboard handed back after Enter
         self.h.feed("\x1b")
 

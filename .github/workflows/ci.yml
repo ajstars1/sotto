@@ -52,6 +52,20 @@ jobs:
           sh -n install/macos.sh
           brew install --cask kitty
           ./install/macos.sh --plan
+      - name: macOS wallpaper, live (screenshot)
+        if: runner.os == 'macOS'
+        continue-on-error: true
+        env:
+          SOTTO_DEMO: "1"
+          SOTTO_STATE: demo/state.json
+        run: |
+          cp sotto/fonts/DepartureMono-Regular.otf ~/Library/Fonts/
+          mkdir -p shots
+          (bin/sotto-wall-macos > shots/macos-wall.log 2>&1 &)
+          sleep 15
+          screencapture -x shots/macos-desktop.png || true
+          cat shots/macos-wall.log; cat ~/.cache/sotto/wall.log 2>/dev/null || true
+          pkill -f "sotto wall" || true
       - name: Windows host
         if: runner.os == 'Windows'
         run: |
@@ -59,3 +73,29 @@ jobs:
           uv run python -m sotto host --selftest
           powershell -ExecutionPolicy Bypass -File install\windows.ps1 -Plan
         continue-on-error: true
+      - name: Windows wallpaper, live (screenshot)
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        shell: pwsh
+        env:
+          SOTTO_DEMO: "1"
+          SOTTO_STATE: demo/state.json
+        run: |
+          New-Item -ItemType Directory -Force shots | Out-Null
+          $p = Start-Process -PassThru -FilePath .venv\Scripts\python.exe -ArgumentList "-m","sotto","host" -RedirectStandardOutput shots\windows-host.log -RedirectStandardError shots\windows-host.err
+          Start-Sleep 20
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+          $g = [System.Drawing.Graphics]::FromImage($bmp)
+          $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+          $bmp.Save("shots\windows-desktop.png")
+          Get-Content shots\windows-host.log, shots\windows-host.err -ErrorAction SilentlyContinue
+          Get-Content "$HOME\.cache\sotto\wall.log" -ErrorAction SilentlyContinue
+          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+      - uses: actions/upload-artifact@v4
+        if: always() && runner.os != 'Linux'
+        with:
+          name: live-${{ runner.os }}
+          path: shots/
+          if-no-files-found: ignore
