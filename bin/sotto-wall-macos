@@ -18,7 +18,7 @@ FS=$($PY -m sotto config get font_size 2>/dev/null)
 [ -n "$FS" ] || FS=11                     # points: 22 px on a Retina screen, where DepartureMono is sharp
 SOCK="${TMPDIR:-/tmp}/sotto-wall-kitty.sock"
 rm -f "$SOCK"
-exec kitty +kitten panel --edge=background --class=sotto-wall --listen-on="unix:$SOCK" \
+exec kitty +kitten panel --edge=background --listen-on="unix:$SOCK" \
     -o allow_remote_control=socket-only \
     -o clear_all_shortcuts=yes \
     -o 'map=cmd+c copy_to_clipboard' -o 'map=cmd+v paste_from_clipboard' \
