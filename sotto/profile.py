@@ -139,6 +139,11 @@ def parse_request(msg: list[str]) -> tuple[float, str] | None:
 
 
 def request(argv: list[str]) -> int:
+    from . import plat
+
+    if not plat.has_unix_dgram():
+        print("profile needs the wall's command socket, which Windows doesn't have yet", file=sys.stderr)
+        return 1
     """The `python -m sotto profile [seconds]` command."""
     from .wall import SOCKET
 

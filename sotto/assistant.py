@@ -22,13 +22,15 @@ import time
 import urllib.parse
 from pathlib import Path
 
+from . import plat
+
 HOME = Path.home()
 STATE = Path(os.environ.get("XDG_CACHE_HOME", HOME / ".cache")) / "sotto" / "state.json"
 WORKDIR = Path(os.environ.get("XDG_CACHE_HOME", HOME / ".cache")) / "sotto" / "assistant"
 CHEATSHEET = [HOME / ".config/hypr/cheatsheet.txt",                               # the live config
               Path(__file__).resolve().parent.parent / "dotfiles/hypr/cheatsheet.txt"]  # the repo's copy
 SHOW_SHORTCUTS = {"type": "cmd", "argv": [str(HOME / ".config/hypr/scripts/cheatsheet.sh")]}
-WALL_SOCKET = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "sotto-wall.sock")
+WALL_SOCKET = os.path.join(plat.runtime_dir(), "sotto-wall.sock")
 SLASH = {   # /commands typed in the prompt
     "terminal": "a terminal inside the wallpaper: drag its label to move it, the bottom-right mark to resize",
     "help": "this list",
@@ -130,7 +132,17 @@ def nice_text(desc: str) -> str:
     return re.sub(r"\b[A-Z]+(?: \+ [A-Z0-9`]+)+", lambda m: nice_keys(m.group(0)), desc)
 
 
+SYSTEM_PROMPT_OTHER = (
+    "You are the assistant built into the live wallpaper of this computer ({os}). Reply in plain text with no "
+    "markdown, at most three short sentences, friendly and direct. If the user wants something done on the computer, "
+    "end with one line that is exactly one of: 'ACTION: open_url <url>', 'ACTION: open_app <app name>', "
+    "'ACTION: search <query>'. Never claim to have done anything else."
+)
+
+
 def system_prompt() -> str:
+    if plat.OS != "linux":
+        return SYSTEM_PROMPT_OTHER.format(os=plat.desktop_name())
     lines = [f"{nice_keys(k)}: {nice_text(d)}" for k, d in shortcuts()]
     if not lines:
         return SYSTEM_PROMPT
@@ -185,6 +197,8 @@ def reply(text, action=None):
 
 # ── apps ──────────────────────────────────────────────────────────────────
 def desktop_apps():
+    if plat.OS != "linux":
+        return plat.apps()
     seen, apps = set(), []
     for d in APP_DIRS:
         if not d.is_dir():
@@ -243,7 +257,12 @@ def find_app(target: str, min_score: float = 1):
 
 
 def default_browser():
-    out = subprocess.run(["xdg-settings", "get", "default-web-browser"], capture_output=True, text=True).stdout.strip()
+    if plat.OS != "linux":
+        return None
+    try:
+        out = subprocess.run(["xdg-settings", "get", "default-web-browser"], capture_output=True, text=True).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return None
     return out or None
 
 
@@ -256,41 +275,37 @@ def projects():
 
 # ── system info ───────────────────────────────────────────────────────────
 def meminfo():
-    mem = {}
-    with open("/proc/meminfo") as f:
-        for line in f:
-            k, v = line.split(":", 1)
-            mem[k] = int(v.split()[0])
-    used = (mem["MemTotal"] - mem["MemAvailable"]) / 1048576
-    return f"RAM: {used:.1f} of {mem['MemTotal'] / 1048576:.1f} GB in use ({round(100 * used * 1048576 / mem['MemTotal'])}%)."
+    pct, total, avail = plat.memory()
+    if not total:
+        return "I can't read the memory use here."
+    used = (total - avail) / 2**30
+    return f"RAM: {used:.1f} of {total / 2**30:.1f} GB in use ({pct}%)."
 
 
 def diskinfo():
-    out = subprocess.run(["zpool", "list", "-H", "-o", "size,alloc,free,cap", "rpool"], capture_output=True, text=True).stdout.split()
-    if len(out) == 4:
-        return f"Disk: {out[2]} free of {out[0]} ({out[3]} used)."
-    st = os.statvfs(HOME)
-    return f"Disk: {st.f_bavail * st.f_frsize / 1e9:.0f} GB free."
+    if plat.OS == "linux":
+        try:
+            out = subprocess.run(["zpool", "list", "-H", "-o", "size,alloc,free,cap", "rpool"], capture_output=True, text=True).stdout.split()
+        except (OSError, subprocess.SubprocessError):
+            out = []
+        if len(out) == 4:
+            return f"Disk: {out[2]} free of {out[0]} ({out[3]} used)."
+    pct, total, free = plat.disk()
+    return f"Disk: {free / 1e9:.0f} GB free of {total / 1e9:.0f} GB ({pct}% used)." if total else "I can't read the disk."
 
 
 def tempinfo():
-    for h in Path("/sys/class/hwmon").glob("hwmon*"):
-        try:
-            if (h / "name").read_text().strip() == "coretemp":
-                return f"CPU is at {round(int((h / 'temp1_input').read_text()) / 1000)}°C."
-        except OSError:
-            pass
-    return "I can't read the CPU temperature."
+    t = plat.cpu_temp()
+    return f"CPU is at {t}°C." if t is not None else "I can't read the CPU temperature here."
 
 
 def ipinfo():
-    out = subprocess.run(["hostname", "-I"], capture_output=True, text=True).stdout.split()
-    return f"Your local IP is {out[0]}." if out else "You don't seem to be connected."
+    ip = plat.local_ip()
+    return f"Your local IP is {ip}." if ip else "You don't seem to be connected."
 
 
 def uptimeinfo():
-    with open("/proc/uptime") as f:
-        s = int(float(f.read().split()[0]))
+    s = plat.uptime_seconds()
     return f"Up for {s // 3600} h {s % 3600 // 60} min."
 
 
@@ -303,7 +318,20 @@ def open_target(target: str):
     """'open X': site, link, folder, project or app."""
     t = target.strip().strip(".").lower()
     t = re.sub(r"\s+(website|site|app|application|folder)$", "", t)
-    if t in ALIASES:
+    if t in ALIASES and plat.OS != "linux":
+        kind, _, val = ALIASES[t].partition(":")
+        if kind == "browser":
+            return reply("Opening your browser.", url_action("https://www.google.com"))
+        if val == "kitty.desktop":
+            return reply("Opening a terminal.", {"type": "project", "path": str(HOME)})
+        if "Nautilus" in val:
+            return reply("Opening your files.", {"type": "path", "path": str(HOME)})
+        if kind == "drawer":
+            return reply("Your apps are in the " + ("Launchpad." if plat.OS == "macos" else "Start menu."))
+        app = find_app("visual studio code") if val == "code.desktop" else None
+        if app:
+            return reply(f"Opening {app['name']}.", {"type": "app", "id": app["id"], "path": app["path"]})
+    if t in ALIASES and plat.OS == "linux":
         kind, _, val = ALIASES[t].partition(":")
         if kind == "drawer":
             return reply("Here are all your apps.", {"type": "drawer"})
@@ -346,11 +374,11 @@ def handle(text: str):
         return reply(listing if cmd == "help" else f"There's no /{word}. Try: {listing}")
     if low in ("help", "?", "commands", "what can you do", "what can i do", "what can i ask"):
         return reply(HELP)
-    if is_question:
+    if is_question and plat.OS == "linux":
         for pattern, answer in HOWTO:
             if re.search(pattern, low):
                 return reply(answer)
-    if is_question or LIST_ASK.search(low):
+    if plat.OS == "linux" and (is_question or LIST_ASK.search(low)):
         r = shortcut_for(low) if is_question or re.search(r"\b(key|shortcut)", low) else None
         if r:
             return r
@@ -390,12 +418,15 @@ def handle(text: str):
         return reply(uptimeinfo())
 
     if re.fullmatch(r"(lock|lock (the )?screen|lock (my )?(pc|computer))", low):
-        return reply("Locking.", {"type": "cmd", "argv": ["loginctl", "lock-session"]})
+        return reply("Locking.", {"type": "cmd", "argv": plat.lock_argv()})
     if re.fullmatch(r"(take a )?screenshot|screen ?shot", low):
-        return reply("Pick an area.", {"type": "cmd", "argv": [os.path.expanduser("~/.config/hypr/scripts/screenshot.sh"), "region"]})
+        return reply("Pick an area.", {"type": "cmd", "argv": plat.screenshot_argv()})
     m = re.fullmatch(r"(?:turn )?(?:the )?volume (up|down)|(mute|unmute)", low)
     if m:
         what = m.group(1) or m.group(2)
+        if plat.OS != "linux":
+            return reply({"up": "Volume up.", "down": "Volume down.", "mute": "Muted.", "unmute": "Unmuted."}[what],
+                         {"type": "volume", "what": what})
         argv = {"up": ["wpctl", "set-volume", "-l", "1", "@DEFAULT_AUDIO_SINK@", "10%+"],
                 "down": ["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "10%-"],
                 "mute": ["wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "1"],
@@ -459,6 +490,21 @@ def run_action(action, launch_app=None):
         else:
             subprocess.Popen(cmdline, shell=True, start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
+    if plat.OS != "linux":
+        if kind in ("url", "path"):
+            plat.open_url(action.get("url") or action["path"])
+        elif kind == "project":
+            plat.open_terminal(action["path"])
+        elif kind == "app":
+            plat.launch_app(action)
+        elif kind == "volume":
+            plat.volume(action["what"])
+        elif kind == "wallterm":
+            x, y = action.get("x"), action.get("y")
+            tell_wall("term" + (f" {x} {y}" if x is not None and y is not None else ""))
+        elif kind == "cmd" and action.get("argv"):
+            plat.spawn(action["argv"])
+        return
     if kind == "url":
         hypr_exec("xdg-open " + _q(action["url"]))
     elif kind == "path":
@@ -481,6 +527,8 @@ def run_action(action, launch_app=None):
 def tell_wall(msg: str):
     """Send the wallpaper a command (it listens on its own socket)."""
     import socket
+    if not plat.has_unix_dgram():
+        return
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as s:
             s.sendto(msg.encode(), WALL_SOCKET)

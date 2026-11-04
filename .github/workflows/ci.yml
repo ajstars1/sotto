@@ -1,0 +1,61 @@
+name: ci
+
+on:
+  push:
+    branches: [main, "preview-*"]
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Python env
+        run: uv sync --managed-python --python 3.12 ${{ matrix.os == 'windows-latest' && '--extra windows' || '' }}
+      - name: Everything compiles
+        run: uv run python -m compileall -q sotto tests
+      - name: Tests
+        run: uv run python -W ignore -m unittest discover -s tests -v
+      - name: Config tools
+        run: |
+          uv run python -m sotto config path
+          uv run python -m sotto config init
+          uv run python -m sotto config check
+          uv run python -m sotto themes
+      - name: Preview frames (demo data, every theme)
+        shell: bash
+        env:
+          SOTTO_DEMO: "1"
+          SOTTO_STATE: demo/state.json
+        run: |
+          mkdir -p previews
+          for t in fresco night paper sage dusk; do
+            printf 'theme = "%s"\n' "$t" > "previews/$t.toml"
+            SOTTO_CONFIG="previews/$t.toml" uv run python -m sotto preview "previews/${{ runner.os }}-$t.png"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: previews-${{ runner.os }}
+          path: previews/*.png
+      - name: macOS launcher and installer
+        if: runner.os == 'macOS'
+        run: |
+          sh -n bin/sotto-wall-macos
+          sh -n install/macos.sh
+          brew install --cask kitty
+          ./install/macos.sh --plan
+      - name: Windows host
+        if: runner.os == 'Windows'
+        run: |
+          uv run python -c "import webview; print('pywebview', webview.__version__ if hasattr(webview, '__version__') else 'ok')"
+          uv run python -m sotto host --selftest
+          powershell -ExecutionPolicy Bypass -File install\windows.ps1 -Plan
+        continue-on-error: true

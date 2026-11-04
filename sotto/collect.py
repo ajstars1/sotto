@@ -18,13 +18,15 @@ import tomllib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from . import config as configmod
+from . import plat
 from . import today as todaymod
 
 HOME = Path.home()
 CACHE = Path(os.environ.get("XDG_CACHE_HOME", HOME / ".cache")) / "sotto"
 STATE = Path(os.environ["SOTTO_STATE"]) if os.environ.get("SOTTO_STATE") else CACHE / "state.json"
 INBOX = CACHE / "say.json"
-CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config")) / "sotto" / "config.toml"
+CONFIG = configmod.PATH
 CLAUDE_PROJECTS = HOME / ".claude" / "projects"
 SCAN_ROOTS = [HOME / "Developer"]
 MAX_PROJECTS = 6
@@ -43,11 +45,7 @@ COMMON = set(
 
 
 def config():
-    try:
-        with open(CONFIG, "rb") as f:
-            return tomllib.load(f)
-    except (OSError, tomllib.TOMLDecodeError):
-        return {}
+    return configmod.raw()
 
 
 def git(path, *args, timeout=3):
@@ -234,40 +232,7 @@ def code_tokens(projects, limit=240):
 
 
 def system():
-    mem = {}
-    with open("/proc/meminfo") as f:
-        for line in f:
-            k, v = line.split(":", 1)
-            mem[k] = int(v.split()[0])
-    ram = 100 - round(mem["MemAvailable"] * 100 / mem["MemTotal"])
-    swap = round((mem["SwapTotal"] - mem["SwapFree"]) * 100 / mem["SwapTotal"]) if mem["SwapTotal"] else 0
-
-    disk = None
-    cap = subprocess.run(["zpool", "list", "-H", "-o", "cap", "rpool"], capture_output=True, text=True).stdout.strip()
-    if cap.endswith("%"):
-        disk = int(cap[:-1])
-    else:
-        st = os.statvfs(HOME)
-        disk = round((1 - st.f_bavail / st.f_blocks) * 100)
-
-    temp = None
-    for h in Path("/sys/class/hwmon").glob("hwmon*"):
-        try:
-            if (h / "name").read_text().strip() == "coretemp":
-                temp = round(int((h / "temp1_input").read_text()) / 1000)
-        except OSError:
-            pass
-
-    with open("/proc/uptime") as f:
-        up = int(float(f.read().split()[0]))
-    pressure = 0.0
-    try:
-        with open("/proc/pressure/memory") as f:
-            pressure = float(re.search(r"avg10=([\d.]+)", f.readline()).group(1))
-    except (OSError, AttributeError):
-        pass
-    return {"ram": ram, "swap": swap, "disk": disk, "temp": temp,
-            "uptime": f"{up // 3600}h{up % 3600 // 60:02d}m", "pressure": pressure}
+    return plat.stats()
 
 
 def headline(name: str, hour: int):

@@ -18,6 +18,8 @@ import subprocess
 import time
 from pathlib import Path
 
+from . import plat
+
 HOME = Path.home()
 CLAUDE = Path(os.environ.get("CLAUDE_CONFIG_DIR", HOME / ".claude"))
 SESSIONS = CLAUDE / "sessions"
@@ -31,13 +33,7 @@ _cache: dict[str, tuple[str, float, dict]] = {}
 
 
 def _alive(pid: int) -> bool:
-    try:
-        os.kill(pid, 0)
-        return True
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
+    return plat.alive(pid)
 
 
 def _transcript(session_id: str) -> str | None:
@@ -214,11 +210,24 @@ def ago(ts: float, now: float | None = None) -> str:
 
 # ── jump to a session's terminal ─────────────────────────────────────────
 def _parent(pid: int) -> int:
-    try:
-        with open(f"/proc/{pid}/stat") as f:
-            return int(f.read().rsplit(")", 1)[1].split()[1])
-    except (OSError, ValueError, IndexError):
-        return 0
+    return plat.parent_pid(pid)
+
+
+def _jump_macos(session: dict) -> str:
+    """Bring forward the app that hosts the session (Terminal, iTerm, kitty...), walking up from claude."""
+    pid = session["pid"]
+    for _ in range(12):
+        pid = _parent(pid)
+        if pid <= 1:
+            break
+        script = f'tell application "System Events" to set frontmost of (first process whose unix id is {pid}) to true'
+        try:
+            r = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=3)
+        except (OSError, subprocess.SubprocessError):
+            break
+        if r.returncode == 0:
+            return ""
+    return f"{session['name']} is in {session.get('cwd', '')}"
 
 
 def jump(session: dict) -> str:
@@ -226,7 +235,9 @@ def jump(session: dict) -> str:
     if session.get("tmux"):
         name = session["tmux"].split(":", 1)[0]
         return f"{session['name']} runs in tmux: tmux attach -t {name}"
-    if not os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
+    if plat.OS == "macos":
+        return _jump_macos(session)
+    if not plat.in_hyprland():
         return f"{session['name']} is in {session.get('cwd', '')}"
     try:
         wins = json.loads(subprocess.run(["hyprctl", "clients", "-j"], capture_output=True, text=True, timeout=3).stdout or "[]")

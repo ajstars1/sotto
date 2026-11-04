@@ -7,11 +7,15 @@
 cd "$(dirname "$0")/.." || exit 1
 SOCK="${XDG_RUNTIME_DIR:-/tmp}/sotto-wall-kitty.sock"
 rm -f "$SOCK"
+# kitty's own colours match the theme in ~/.config/sotto/config.toml (they show in the few pixels
+# the character grid doesn't cover)
+BG=$(.venv/bin/python -m sotto config get bg 2>/dev/null) || BG='#ece2d0'
+FG=$(.venv/bin/python -m sotto config get text 2>/dev/null) || FG='#3d2c1f'
 exec kitty +kitten panel --edge=background --class=sotto-wall --listen-on="unix:$SOCK" \
     -o allow_remote_control=socket-only \
     -o clear_all_shortcuts=yes \
     -o 'map=ctrl+shift+c copy_to_clipboard' -o 'map=ctrl+shift+v paste_from_clipboard' \
-    -o background=#ece2d0 -o foreground=#3d2c1f \
+    -o "background=$BG" -o "foreground=$FG" \
     -o 'font_family=DepartureMono Nerd Font' -o font_size=8.25 \
     -o background_opacity=1 -o window_padding_width=0 -o cursor_trail=0 -o mouse_hide_wait=0 \
     .venv/bin/python -m sotto wall

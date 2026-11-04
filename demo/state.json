@@ -1,17 +1,143 @@
 {
  "version": 1,
  "user": "FRIEND",
- "headline": ["GOOD MORNING,", "FRIEND."],
+ "headline": [
+  "GOOD MORNING,",
+  "FRIEND."
+ ],
  "mood": "happy",
- "system": {"ram": 41, "swap": 3, "disk": 52, "temp": 44, "uptime": "2h10m", "pressure": 0.0},
+ "system": {
+  "ram": 41,
+  "swap": 3,
+  "disk": 52,
+  "temp": 44,
+  "uptime": "2h10m",
+  "pressure": 0.0
+ },
  "projects": [
-  {"name": "SOTTO", "path": "/tmp", "display_path": "~/Developer/sotto", "branch": "main", "dirty": 2, "commit": "feat: wallpaper assistant", "commit_ago": "12m ago", "claude_ago": "just now", "open": []},
-  {"name": "PORTFOLIO-SITE", "path": "/tmp", "display_path": "~/Developer/portfolio-site", "branch": "main", "dirty": 0, "commit": "fix: dark mode toggle", "commit_ago": "3h ago", "claude_ago": "2h ago", "open": []},
-  {"name": "IOT-COLLAR", "path": "/tmp", "display_path": "~/Developer/iot-collar", "branch": "feat/firmware", "dirty": 1, "commit": "feat: heart-rate filter", "commit_ago": "1d ago", "claude_ago": "1d ago", "open": []},
-  {"name": "BLENDER-SCENES", "path": "/tmp", "display_path": "~/Developer/blender-scenes", "branch": "main", "dirty": 0, "commit": "chore: render presets", "commit_ago": "2d ago", "claude_ago": "", "open": []},
-  {"name": "ML-NOTEBOOKS", "path": "/tmp", "display_path": "~/Developer/ml-notebooks", "branch": "main", "dirty": 0, "commit": "docs: training notes", "commit_ago": "4d ago", "claude_ago": "", "open": []},
-  {"name": "DOTFILES", "path": "/tmp", "display_path": "~/dotfiles", "branch": "main", "dirty": 0, "commit": "feat: fresco palette", "commit_ago": "5d ago", "claude_ago": "", "open": []}
+  {
+   "name": "SOTTO",
+   "path": "/tmp",
+   "display_path": "~/Developer/sotto",
+   "branch": "main",
+   "dirty": 2,
+   "commit": "feat: wallpaper assistant",
+   "commit_ago": "12m ago",
+   "claude_ago": "just now",
+   "open": []
+  },
+  {
+   "name": "PORTFOLIO-SITE",
+   "path": "/tmp",
+   "display_path": "~/Developer/portfolio-site",
+   "branch": "main",
+   "dirty": 0,
+   "commit": "fix: dark mode toggle",
+   "commit_ago": "3h ago",
+   "claude_ago": "2h ago",
+   "open": []
+  },
+  {
+   "name": "IOT-COLLAR",
+   "path": "/tmp",
+   "display_path": "~/Developer/iot-collar",
+   "branch": "feat/firmware",
+   "dirty": 1,
+   "commit": "feat: heart-rate filter",
+   "commit_ago": "1d ago",
+   "claude_ago": "1d ago",
+   "open": []
+  },
+  {
+   "name": "BLENDER-SCENES",
+   "path": "/tmp",
+   "display_path": "~/Developer/blender-scenes",
+   "branch": "main",
+   "dirty": 0,
+   "commit": "chore: render presets",
+   "commit_ago": "2d ago",
+   "claude_ago": "",
+   "open": []
+  },
+  {
+   "name": "ML-NOTEBOOKS",
+   "path": "/tmp",
+   "display_path": "~/Developer/ml-notebooks",
+   "branch": "main",
+   "dirty": 0,
+   "commit": "docs: training notes",
+   "commit_ago": "4d ago",
+   "claude_ago": "",
+   "open": []
+  },
+  {
+   "name": "DOTFILES",
+   "path": "/tmp",
+   "display_path": "~/dotfiles",
+   "branch": "main",
+   "dirty": 0,
+   "commit": "feat: fresco palette",
+   "commit_ago": "5d ago",
+   "claude_ago": "",
+   "open": []
+  }
  ],
  "messages": [],
- "tokens": []
+ "tokens": [],
+ "agents": [
+  {
+   "pid": 0,
+   "name": "api-refactor",
+   "cwd": "~/Developer/api",
+   "status": "needs",
+   "detail": "Which database should the migration target, staging or prod?",
+   "since": 0,
+   "tmux": ""
+  },
+  {
+   "pid": 0,
+   "name": "docs-site",
+   "cwd": "~/Developer/docs",
+   "status": "work",
+   "detail": "Bash: npm run build",
+   "since": 0,
+   "tmux": ""
+  },
+  {
+   "pid": 0,
+   "name": "landing-page",
+   "cwd": "~/Developer/site",
+   "status": "done",
+   "detail": "The hero section now loads in 0.8 s instead of 2.4 s.",
+   "since": 0,
+   "tmux": ""
+  }
+ ],
+ "today": {
+  "configured": true,
+  "error": "",
+  "footer": "2 reviews waiting",
+  "items": [
+   {
+    "when": "10:00",
+    "title": "Standup",
+    "flag": "event"
+   },
+   {
+    "when": "today",
+    "title": "Send the beta notes",
+    "flag": "today"
+   },
+   {
+    "when": "14:30",
+    "title": "Design review: settings page",
+    "flag": "event"
+   },
+   {
+    "when": "yesterday",
+    "title": "Reply to the hosting invoice",
+    "flag": "overdue"
+   }
+  ]
+ }
 }

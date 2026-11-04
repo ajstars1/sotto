@@ -11,6 +11,7 @@ FONT_CANDIDATES = [
     Path.home() / ".local/share/fonts/DepartureMonoNerdFont-Regular.otf",
     Path.home() / ".fonts/DepartureMonoNerdFont-Regular.otf",
     Path("/usr/local/share/fonts/sotto/DepartureMonoNerdFont-Regular.otf"),   # for the login screen
+    Path(__file__).resolve().parent / "fonts" / "DepartureMono-Regular.otf",  # bundled (MIT): macOS, Windows
 ]
 
 SPRITE_COLORS = {"o": "line", "a": "text", "h": "accent", "d": "dim", "k": "bg", "w": "accent", "t": "alert", "c": "dim", "p": "accent"}

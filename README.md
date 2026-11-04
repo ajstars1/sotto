@@ -2,6 +2,8 @@
 
 A living, interactive terminal wallpaper for [Hyprland](https://hypr.land): a clock and your projects that react to the mouse, an AI prompt you open by double-clicking, and a real shell drawn inside the wallpaper, with a matching dock, app launcher, login screen and boot splash. Python, kitty and GTK4 on Ubuntu.
 
+**New in 0.2 (preview): macOS and Windows.** The wallpaper itself now runs on a Mac (in kitty's background panel) and on Windows (behind the desktop icons). There's also an easy config for themes, layout and your own widgets, and a Claude Code skill that customizes it for you. See [macOS and Windows](#macos-and-windows-preview) and [Customize](#customize).
+
 *from* sotto voce, *Italian for "in a quiet voice", and* sotto, *"underneath": where a wallpaper lives.*
 
 **A wallpaper that's alive.** It knows what you're working on, it redraws itself from a JSON file, scripts can talk to it, and you can double-click it to ask anything.
@@ -123,6 +125,76 @@ uv sync --managed-python --python 3.12          # the wallpaper's Python env; im
 
 Set `$sotto` near the top of `dotfiles/hypr/hyprland.conf` to where you cloned the repo. Then log out, pick **Hyprland** on the login screen, and log in. For AI answers, install and log in to [Claude Code](https://claude.com/claude-code).
 
+## macOS and Windows (preview)
+
+The wallpaper runs on a Mac and on Windows: the clock, the agents board, Today, your widgets, the mouse trail and the double-click prompt. The rest of the desktop (dock, app list, login and boot screens, snapping) stays Linux-only, since macOS and Windows have their own.
+
+This is a **preview**. It passes the automated tests on macOS and Windows (GitHub Actions), but it hasn't been used day to day on either yet. [Issues](https://github.com/ajstars1/sotto/issues) are very welcome.
+
+**macOS** (needs [kitty](https://sw.kovidgoyal.net/kitty/) 0.42 or newer and [uv](https://docs.astral.sh/uv/)):
+
+```sh
+brew install --cask kitty && brew install uv
+git clone https://github.com/ajstars1/sotto ~/sotto && cd ~/sotto
+./install/macos.sh --plan      # what it would do
+./install/macos.sh             # font, Python env, starter config; starts now and at every login
+```
+
+- **Keyboard:** macOS doesn't let apps grab the keyboard, so click the wallpaper once before typing in the prompt or the terminal.
+- **Jumping to a session:** clicking an agent brings its terminal app forward. The first time, macOS asks to let kitty control System Events.
+- **Remove it:** `./install/macos.sh --uninstall`.
+
+**Windows 10/11** (needs [uv](https://docs.astral.sh/uv/): `winget install --id=astral-sh.uv -e`):
+
+```powershell
+git clone https://github.com/ajstars1/sotto $HOME\sotto; cd $HOME\sotto
+powershell -ExecutionPolicy Bypass -File install\windows.ps1          # starts now and at every login
+```
+
+How it works on Windows:
+- The wall draws into a WebView2 window that sits behind the desktop icons, the way live-wallpaper apps do it.
+- Windows sends no mouse input to a window back there, so sotto reads the cursor position 60 times a second while it's over the bare desktop. It uses no hooks and nothing is injected into other apps.
+- When the prompt needs the keyboard, the wallpaper steps in front for a moment and goes back afterwards.
+
+Known gaps on Windows:
+- The primary monitor only.
+- No `/terminal` yet.
+- A double-click on a desktop icon also opens the prompt.
+- `.venv\Scripts\python -m sotto host --window` runs it in a normal window, and `--stop` stops it.
+
+**Any OS, nothing to install:** `uv run python -m sotto web` opens the live wallpaper in a browser tab. It's handy to try sotto, or a config change.
+
+## Customize
+
+Themes, colours, the clock, the greeting, what goes in each column, the effects, and **your own widgets** (fixed text, a file, or any command's output) all live in `~/.config/sotto/config.toml`. The running wallpaper picks up every save within a second.
+
+```sh
+python -m sotto config init     # a commented starter config
+python -m sotto config check    # what's wrong, if anything
+python -m sotto preview out.png # see it
+```
+
+```toml
+theme = "night"                 # fresco · night · paper · sage · dusk
+
+[layout]
+left = ["agents"]
+right = ["today", "weather"]
+
+[[widget]]
+id = "weather"
+title = "WEATHER"
+command = "curl -s 'https://wttr.in/?format=%l:+%c+%t'"
+every = 1800
+```
+
+| fresco (default) | night, 12h clock, two widgets |
+|---|---|
+| ![fresco](docs/theme-fresco.png) | ![night](docs/theme-night.png) |
+
+- **Every key, with examples:** [docs/CUSTOMIZE.md](docs/CUSTOMIZE.md).
+- **Let Claude do it:** `python -m sotto skill install` adds a Claude Code skill. Then just ask: *"make my wallpaper dark with a green accent and add the weather"*. It edits the config, checks it, renders a preview and looks at it before saying it's done.
+
 ## Configuration
 
 ```toml
@@ -158,6 +230,9 @@ Repeating calendar events are not expanded yet. The command runs with each refre
 | [`sotto/wall.py`](sotto/wall.py) | the wallpaper: watches `state.json` and the `say` inbox, re-assembles only changed cells, dot trail, clicks, and the double-click that opens the prompt |
 | [`sotto/assistant.py`](sotto/assistant.py) | the prompt's brain: local intents first, Claude only for real questions, a whitelist of safe actions |
 | [`sotto/dock.py`](sotto/dock.py) | GTK4 + gtk4-layer-shell: the dock, the Apps list, the wallpaper prompt, and the snap preview outline. It notes which app has focus, so the Apps list knows when you last used each one (`~/.cache/sotto/app-usage.json`; before that it uses GNOME's record). |
+| [`sotto/config.py`](sotto/config.py), [`sotto/widgets.py`](sotto/widgets.py) | the config file (themes, layout, effects, validation) and your own widgets, run in the background |
+| [`sotto/plat.py`](sotto/plat.py) | what differs between Linux, macOS and Windows: opening things, system numbers, processes |
+| [`sotto/web.py`](sotto/web.py), [`sotto/host_windows.py`](sotto/host_windows.py) | the wall drawn by xterm.js in a web view (browser, or Windows behind the icons) |
 | [`sotto/term.py`](sotto/term.py) | the terminal inside the wallpaper: your shell in a pty, its screen kept by pyte and drawn by the wall as a card |
 | [`sotto/greeter.py`](sotto/greeter.py) | the login screen: the wallpaper's effects (it reuses `Wall`) with a password line, talking to greetd over its socket |
 | [`sotto/bootsplash.py`](sotto/bootsplash.py) | draws the boot screen as a Plymouth script theme. Plymouth starts before your fonts are available, so all the text is drawn into PNGs. |
@@ -168,6 +243,7 @@ Repeating calendar events are not expanded yet. The command runs with each refre
 ## Known limits
 
 - One monitor so far.
+- macOS and Windows are a preview (see above).
 - Snapping happens when the drag pauses at an edge, because Hyprland doesn't report the mouse release during title-bar drags.
 - Hyprland has no built-in minimize, so minimized windows live on a hidden workspace.
 - The terminal inside the wallpaper is emulated by pyte: shells, git, ssh and most full-screen programs work, but programs can't use the mouse there or show images. One at a time.
@@ -175,3 +251,5 @@ Repeating calendar events are not expanded yet. The command runs with each refre
 ## License
 
 MIT
+
+Bundled with credit: [Departure Mono](https://departuremono.com) (MIT, Helena Zhang and Tobias Fried) in `sotto/fonts/`, and [xterm.js](https://xtermjs.org) (MIT) in `sotto/web/vendor/`.

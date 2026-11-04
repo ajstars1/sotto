@@ -1,0 +1,29 @@
+#!/bin/sh
+# sotto on macOS (preview): the living wallpaper in kitty's background panel.
+# Needs kitty 0.42 or newer (brew install --cask kitty). install/macos.sh sets this up to start at login.
+#
+# Keyboard: macOS doesn't let an app grab the keyboard, so click the wallpaper once before typing
+# into the double-click prompt or the terminal inside it.
+cd "$(dirname "$0")/.." || exit 1
+for d in /Applications/kitty.app/Contents/MacOS "$HOME/Applications/kitty.app/Contents/MacOS"; do
+    [ -x "$d/kitty" ] && PATH="$d:$PATH"
+done
+export PATH
+command -v kitty >/dev/null 2>&1 || { echo "sotto needs kitty 0.42+: brew install --cask kitty" >&2; exit 1; }
+PY=.venv/bin/python
+[ -x "$PY" ] || { echo "run 'uv sync --managed-python --python 3.12' in $(pwd) first" >&2; exit 1; }
+BG=$($PY -m sotto config get bg 2>/dev/null) || BG='#ece2d0'
+FG=$($PY -m sotto config get text 2>/dev/null) || FG='#3d2c1f'
+FS=$($PY -m sotto config get font_size 2>/dev/null)
+[ -n "$FS" ] || FS=11                     # points: 22 px on a Retina screen, where DepartureMono is sharp
+SOCK="${TMPDIR:-/tmp}/sotto-wall-kitty.sock"
+rm -f "$SOCK"
+exec kitty +kitten panel --edge=background --class=sotto-wall --listen-on="unix:$SOCK" \
+    -o allow_remote_control=socket-only \
+    -o clear_all_shortcuts=yes \
+    -o 'map=cmd+c copy_to_clipboard' -o 'map=cmd+v paste_from_clipboard' \
+    -o "background=$BG" -o "foreground=$FG" \
+    -o 'font_family=Departure Mono' -o "font_size=$FS" \
+    -o background_opacity=1 -o window_padding_width=0 -o cursor_trail=0 -o mouse_hide_wait=0 \
+    -o macos_option_as_alt=yes \
+    "$PY" -m sotto wall

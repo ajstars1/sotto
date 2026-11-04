@@ -36,6 +36,22 @@ class _SGR(dict):
 
 SGR_FG, SGR_BG = _SGR(38), _SGR(48)
 
+
+def set_palette(colors: dict[str, str]) -> bool:
+    """Switch the theme ({"bg": "#ece2d0", ...}). Returns True when anything changed."""
+    new = {k: (int(v[1:3], 16), int(v[3:5], 16), int(v[5:7], 16)) for k, v in colors.items() if k in PALETTE}
+    if all(PALETTE[k] == v for k, v in new.items()):
+        return False
+    PALETTE.update(new)
+    SGR_FG.clear()
+    SGR_BG.clear()
+    return True
+
+
+def hex_of(name: str) -> str:
+    r, g, b = rgb(name)
+    return f"#{r:02x}{g:02x}{b:02x}"
+
 BOX = {"tl": "┌", "tr": "┐", "bl": "└", "br": "┘", "h": "─", "v": "│"}
 
 

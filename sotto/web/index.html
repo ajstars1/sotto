@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}}</title>
+<link rel="stylesheet" href="/static/xterm.css">
+<style>
+  @font-face { font-family: "Departure Mono"; src: url("/static/font.woff2") format("woff2"); font-display: block; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: {{BG}}; cursor: default; }
+  #wall { position: absolute; inset: 0; }
+  .xterm .xterm-viewport { overflow: hidden !important; background: transparent !important; }
+  .xterm-screen, .xterm-rows { cursor: default !important; }
+  #note { position: fixed; left: 12px; bottom: 10px; font: 12px "Departure Mono", monospace; color: {{FG}}; opacity: .55; display: none; }
+</style>
+</head>
+<body>
+<div id="wall"></div>
+<div id="note">sotto lost the connection to its wallpaper process. It reconnects by itself.</div>
+<script src="/static/xterm.js"></script>
+<script>
+(async () => {
+  const TOKEN = new URLSearchParams(location.search).get("t") || "";
+  const FONT_SIZE = {{FONT_SIZE}};
+  await document.fonts.load(`${FONT_SIZE}px "Departure Mono"`).catch(() => {});
+
+  const term = new Terminal({
+    fontFamily: '"Departure Mono", monospace',
+    fontSize: FONT_SIZE,
+    lineHeight: 1,
+    letterSpacing: 0,
+    scrollback: 0,
+    cursorBlink: false,
+    cursorStyle: "bar",
+    customGlyphs: true,              // box and block characters as exact pixels, like kitty
+    allowProposedApi: true,
+    theme: { background: "{{BG}}", foreground: "{{FG}}", cursor: "{{BG}}" },
+  });
+  term.open(document.getElementById("wall"));
+
+  // ── keys and mouse go back to the wall, batched every frame and in order ──
+  let pending = "", sending = Promise.resolve();
+  const post = (path, body) => fetch(path, { method: "POST", headers: { "X-Sotto-Token": TOKEN }, body });
+  const flush = () => {
+    if (!pending) return;
+    const body = pending; pending = "";
+    sending = sending.then(() => post("/input", body)).catch(() => {});
+  };
+  setInterval(flush, 16);
+  term.onData(d => { pending += d; });
+  term.onBinary(d => { pending += d; });
+  // the wall can't scroll: the wheel is a mouse report, never page scrolling
+  document.addEventListener("wheel", e => e.preventDefault(), { passive: false });
+  document.addEventListener("contextmenu", e => e.preventDefault());
+
+  // ── fit the grid to the window; the wall learns the size and the cell's pixels ──
+  const cell = () => {
+    const d = term._core && term._core._renderService && term._core._renderService.dimensions;
+    if (d && d.css && d.css.cell && d.css.cell.width) return { w: d.css.cell.width, h: d.css.cell.height };
+    const s = document.createElement("span");
+    s.style.cssText = `position:absolute;visibility:hidden;font:${FONT_SIZE}px "Departure Mono";line-height:1`;
+    s.textContent = "W".repeat(100);
+    document.body.appendChild(s);
+    const r = { w: s.getBoundingClientRect().width / 100, h: s.getBoundingClientRect().height };
+    s.remove();
+    return r;
+  };
+  let lastSize = "";
+  const fit = (force) => {
+    const c = cell();
+    const cols = Math.max(10, Math.floor(innerWidth / c.w));
+    const rows = Math.max(5, Math.floor(innerHeight / c.h));
+    if (cols !== term.cols || rows !== term.rows) term.resize(cols, rows);
+    const key = `${cols}x${rows}`;
+    if (force || key !== lastSize) {
+      lastSize = key;
+      post("/resize", JSON.stringify({ cols, rows, cw: c.w, ch: c.h })).catch(() => {});
+    }
+  };
+  let t;
+  addEventListener("resize", () => { clearTimeout(t); t = setTimeout(() => fit(false), 120); });
+
+  // ── what the wall draws ──
+  const note = document.getElementById("note");
+  const connect = () => {
+    const es = new EventSource(`/stream?t=${encodeURIComponent(TOKEN)}`);
+    es.addEventListener("open", () => { note.style.display = "none"; fit(true); });
+    es.addEventListener("out", e => term.write(JSON.parse(e.data)));
+    es.addEventListener("theme", e => {
+      const bg = JSON.parse(e.data);
+      document.body.style.background = bg;
+      term.options.theme = { ...term.options.theme, background: bg, cursor: bg };
+    });
+    es.addEventListener("error", () => { note.style.display = "block"; });
+  };
+  connect();
+  term.focus();
+})();
+</script>
+</body>
+</html>

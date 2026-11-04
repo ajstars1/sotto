@@ -9,6 +9,7 @@ label to move it and the bottom-right mark to resize it; × closes it (or type
 import fcntl
 import os
 import pty
+import shutil
 import signal
 import struct
 import subprocess
@@ -29,6 +30,12 @@ DECCKM = 1 << 5            # pyte keeps private modes shifted by 5: application 
 PASTE = 2004 << 5          # bracketed paste
 # don't let programs in the shell find (and drive) the wallpaper's own kitty
 HIDE_ENV = ("KITTY_WINDOW_ID", "KITTY_LISTEN_ON", "KITTY_PID", "KITTY_PUBLIC_KEY", "TERMINFO", "TERM_PROGRAM")
+
+
+def _controlling_tty():
+    """In the child, before the shell starts: new session, stdin (the pty) becomes its terminal."""
+    os.setsid()
+    fcntl.ioctl(0, termios.TIOCSCTTY, 0)
 
 
 def color(c: str, default: str) -> str:
@@ -53,8 +60,13 @@ class Term:
         env = {k: v for k, v in os.environ.items() if k not in HIDE_ENV}
         env.update(TERM="xterm-256color", COLORTERM="truecolor")
         self.shell = os.environ.get("SHELL") or "/bin/bash"
-        # setsid -c: a new session with the pty as its controlling terminal, so Ctrl+C and jobs work
-        self.proc = subprocess.Popen(["setsid", "-c", self.shell], stdin=slave, stdout=slave, stderr=slave,
+        # a new session with the pty as its controlling terminal, so Ctrl+C and jobs work:
+        # `setsid -c` on Linux; macOS has no setsid command, so the child does it itself
+        if shutil.which("setsid"):
+            argv, pre = ["setsid", "-c", self.shell], None
+        else:
+            argv, pre = [self.shell], _controlling_tty
+        self.proc = subprocess.Popen(argv, stdin=slave, stdout=slave, stderr=slave, preexec_fn=pre,
                                      cwd=cwd or os.path.expanduser("~"), env=env, close_fds=True)
         os.close(slave)
         os.set_blocking(self.master, False)
